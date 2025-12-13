@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adobe印章產生器</title>
+    <style>
+        body { font-family: "Microsoft JhengHei", sans-serif; display: flex; flex-direction: column; align-items: center; background-color: #f0f0f0; padding: 20px; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; max-width: 500px; width: 100%; }
+        h2 { color: #333; margin-bottom: 20px; }
+        .input-group { margin-bottom: 15px; text-align: left; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
+        input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; font-size: 16px; }
+        button { background-color: #d9534f; color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; font-size: 18px; margin-top: 10px; width: 100%; }
+        button:hover { background-color: #c9302c; }
+        canvas { display: none; } /* 隱藏畫布，只顯示預覽圖 */
+        #preview-container { margin-top: 20px; border: 1px dashed #ccc; padding: 10px; background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABGdBTUEAALGPC/xhBQAAAAlwSFlzAAAOwgAADsIBFShKgAAAABh0RVh0U29mdHdhcmUAcGFpbnQubmV0IDQuMC41ZYmyewAAAB1JREFUOE9jYBgFoyE4Ggqno2E4Ggqno2E4IAQAAArOQHtRScfoAAAAAElFTkSuQmCC'); } 
+        img { max-width: 200px; height: auto; }
+        .note { font-size: 12px; color: #666; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>電子圓形印章產生器</h2>
+    
+    <div class="input-group">
+        <label>姓氏 (如: 王)</label>
+        <input type="text" id="surname" value="" placeholder="輸入姓氏">
+    </div>
+    <div class="input-group">
+        <label>名字 (如: 大明)</label>
+        <input type="text" id="name" value="" placeholder="輸入名字">
+    </div>
+    <div class="input-group">
+        <label>日期 (如: 2025.12.13)</label>
+        <input type="text" id="dateStr" value="2025.12.13" placeholder="輸入日期">
+    </div>
+    <div class="input-group">
+        <label>下方文字 (選填)</label>
+        <input type="text" id="bottomText" value="">
+    </div>
+
+    <button onclick="generateStamp()">產生並下載印章圖片</button>
+
+    <div id="preview-container">
+        <p>預覽區域</p>
+        <img id="previewImage" alt="印章預覽">
+    </div>
+    <p class="note">產生的是透明背景 PNG，可直接匯入 Adobe Acrobat 作為圖章。</p>
+</div>
+
+<canvas id="stampCanvas" width="600" height="600"></canvas>
+
+<script>
+    function generateStamp() {
+        const canvas = document.getElementById('stampCanvas');
+        const ctx = canvas.getContext('2d');
+        const surname = document.getElementById('surname').value.trim();
+        const name = document.getElementById('name').value.trim();
+        const dateStr = document.getElementById('dateStr').value.trim();
+        const bottomText = document.getElementById('bottomText').value.trim();
+
+        const size = 600;
+        const center = size / 2;
+        const radius = 280; // 留一點邊距
+        const color = "red"; // 印章顏色
+
+        // 1. 清除畫布
+        ctx.clearRect(0, 0, size, size);
+
+        // 2. 畫圓框
+        ctx.beginPath();
+        ctx.arc(center, center, radius, 0, 2 * Math.PI);
+        ctx.lineWidth = 15;
+        ctx.strokeStyle = color;
+        ctx.stroke();
+
+        // 3. 畫中間兩條線
+        const chordHeight = radius * 0.35;
+        const margin = 20;
+        
+        ctx.beginPath();
+        // 上橫線
+        ctx.moveTo(center - radius + margin, center - chordHeight);
+        ctx.lineTo(center + radius - margin, center - chordHeight);
+        // 下橫線
+        ctx.moveTo(center - radius + margin, center + chordHeight);
+        ctx.lineTo(center + radius - margin, center + chordHeight);
+        
+        ctx.lineWidth = 10;
+        ctx.lineCap = "round"; // 圓角線條比較好看
+        ctx.stroke();
+
+        // 4. 設定文字樣式
+        ctx.textAlign = "center";
+        ctx.fillStyle = color;
+        
+        // 嘗試使用標楷體，若無則使用微軟正黑體
+        const fontFam = "'DFKai-SB', 'BiauKai', 'Microsoft JhengHei', sans-serif";
+
+        // A. 姓名 (上方)
+        const fullName = surname + name;
+        ctx.font = "bold 130px " + fontFam;
+        ctx.textBaseline = "middle";
+        // 位置調整：圓心往上移動
+        ctx.fillText(fullName, center, center - radius * 0.60);
+
+        // B. 日期 (中間)
+        ctx.font = "bold 100px " + fontFam;
+        ctx.fillText(dateStr, center, center);
+
+        // C. 底部文字 (下方)
+        ctx.font = "bold 130px " + fontFam;
+        ctx.fillText(bottomText, center, center + radius * 0.60);
+
+        // 5. 輸出圖片
+        const dataURL = canvas.toDataURL("image/png");
+        
+        // 更新預覽
+        const previewImg = document.getElementById('previewImage');
+        previewImg.src = dataURL;
+
+        // 6. 自動下載
+        const link = document.createElement('a');
+        link.download = `Stamp_${surname}${name}_${dateStr}.png`;
+        link.href = dataURL;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+</script>
+
+</body>
+</html>

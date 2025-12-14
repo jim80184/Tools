@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --accent-color: #4a90e2;
+            --accent-hover: #357abd;
+            --bg-color: #f4f6f8;
+            --card-bg: #ffffff;
+            --text-primary: #333;
+            --text-secondary: #666;
+            --border-color: #e1e4e8;
+            --input-bg: #f8f9fa;
+        }
+
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: var(--bg-color); padding: 40px; color: var(--text-primary); }
+        * { box-sizing: border-box; }
+
+        .tool-card {
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        h2 { margin: 0 0 30px 0; text-align: center; color: var(--accent-color); }
+
+        .input-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-primary); }
+        
+        input[type="text"], input[type="date"] {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: var(--input-bg);
+            font-size: 16px;
+            color: var(--text-primary);
+            transition: 0.2s;
+            outline: none;
+            font-family: 'Noto Sans TC', sans-serif;
+        }
+
+        input[type="text"]:focus, input[type="date"]:focus {
+            border-color: var(--accent-color);
+            background-color: #fff;
+        }
+
+        .generate-btn {
+            width: 100%;
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 16px;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background-color 0.2s;
+        }
+        .generate-btn:hover { background-color: var(--accent-hover); }
+
+        #preview-container {
+            margin-top: 30px;
+            padding: 20px;
+            border: 2px dashed var(--border-color);
+            border-radius: 12px;
+            text-align: center;
+            background-color: #fafafa;
+        }
+        #previewImage { max-width: 200px; height: auto; margin-top: 10px; }
+        .preview-label { color: var(--text-secondary); font-size: 14px; margin-bottom: 10px; display: block; }
+        
+        .note { font-size: 13px; color: var(--text-secondary); margin-top: 15px; text-align: center; line-height: 1.6; }
+        
+        canvas { display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="tool-card">
+        <h2>🔴 Adobe 電子印章產生器</h2>
+        
+        <div class="input-group">
+            <label>姓氏</label>
+            <input type="text" id="surname" placeholder="例如：王" value="">
+        </div>
+        
+        <div class="input-group">
+            <label>名字</label>
+            <input type="text" id="name" placeholder="例如：大明" value="">
+        </div>
+        
+        <div class="input-group">
+            <label>日期</label>
+            <input type="date" id="datePicker">
+        </div>
+        
+        <div class="input-group">
+            <label>下方文字</label>
+            <input type="text" id="bottomText" placeholder="例如：簽署用 (可留空)" value="">
+        </div>
+
+        <button class="generate-btn" onclick="generateStamp()">⚡ 產生並下載印章</button>
+
+        <div id="preview-container">
+            <span class="preview-label">預覽區域 (透明背景)</span>
+            <img id="previewImage" alt="等待產生..." style="display:none;"> 
+        </div>
+        
+        <p class="note">💡 提示：請存成圖片後，再貼到PDF上。</p>
+    </div>
+
+    <canvas id="stampCanvas" width="600" height="600"></canvas>
+
+    <script>
+        // 頁面載入時，自動填入今天日期
+        window.onload = function() {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            document.getElementById('datePicker').value = `${yyyy}-${mm}-${dd}`;
+        };
+
+        function generateStamp() {
+            const canvas = document.getElementById('stampCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            const surname = document.getElementById('surname').value.trim();
+            const name = document.getElementById('name').value.trim();
+            const bottomText = document.getElementById('bottomText').value.trim();
+            const rawDate = document.getElementById('datePicker').value;
+
+            // 將日期格式從 "-" 改為 "."
+            // 既然確認會有值，直接轉換即可
+            const dateStr = rawDate ? rawDate.replace(/-/g, '.') : "";
+
+            const size = 600;
+            const center = size / 2;
+            const radius = 280; 
+            const color = "red"; 
+
+            // 1. 清除畫布
+            ctx.clearRect(0, 0, size, size);
+
+            // 2. 畫圓框
+            ctx.beginPath();
+            ctx.arc(center, center, radius, 0, 2 * Math.PI);
+            ctx.lineWidth = 15;
+            ctx.strokeStyle = color;
+            ctx.stroke();
+
+            // 3. 畫中間兩條線
+            const chordHeight = radius * 0.35;
+            const margin = 20;
+            
+            ctx.beginPath();
+            ctx.moveTo(center - radius + margin, center - chordHeight);
+            ctx.lineTo(center + radius - margin, center - chordHeight);
+            ctx.moveTo(center - radius + margin, center + chordHeight);
+            ctx.lineTo(center + radius - margin, center + chordHeight);
+            
+            ctx.lineWidth = 10;
+            ctx.lineCap = "round"; 
+            ctx.stroke();
+
+            // 4. 設定文字
+            ctx.textAlign = "center"; 
+            ctx.fillStyle = color;
+            const fontFam = "'DFKai-SB', 'BiauKai', 'Microsoft JhengHei', sans-serif";
+
+            // A. 姓名 (上方)
+            const fullName = surname + name;
+            if (fullName) {
+                const nameFontSize = fullName.length > 3 ? 110 : 130;
+                ctx.font = `bold ${nameFontSize}px ${fontFam}`;
+                ctx.textBaseline = "middle";
+                ctx.fillText(fullName, center, center - radius * 0.60);
+            }
+
+            // B. 日期 (中間) - 重點修正區
+            if (dateStr) {
+                ctx.font = "bold 100px " + fontFam;
+                // 強制設定置中對齊
+                ctx.textAlign = "center"; 
+                // 強制設定垂直居中
+                ctx.textBaseline = "middle"; 
+                
+                // 【校正】標楷體數字視覺上容易偏高，這裡加 5px 讓它視覺更置中
+                const visualCorrection = 5; 
+                ctx.fillText(dateStr, center, center + visualCorrection);
+            }
+
+            // C. 底部文字 (下方)
+            if (bottomText) {
+                ctx.font = "bold 130px " + fontFam;
+                ctx.textBaseline = "middle"; // 確保底部文字也垂直置中
+                ctx.fillText(bottomText, center, center + radius * 0.60);
+            }
+
+            // 5. 顯示預覽
+            const dataURL = canvas.toDataURL("image/png");
+            const previewImg = document.getElementById('previewImage');
+            previewImg.src = dataURL;
+            previewImg.style.display = 'inline-block';
+
+            // 6. 自動下載
+            const filenameParts = [surname, name, dateStr].filter(Boolean).join('_');
+            const finalFilename = filenameParts ? `Stamp_${filenameParts}.png` : 'Stamp_Custom.png';
+
+            const link = document.createElement('a');
+            link.download = finalFilename;
+            link.href = dataURL;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>

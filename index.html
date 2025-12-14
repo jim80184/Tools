@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的專屬工具箱</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --sidebar-bg: #ffffff;
+            --border-color: #e1e4e8;
+            --accent-color: #4a90e2;
+            --text-primary: #333;
+            --text-secondary: #666;
+            --bg-color: #f4f6f8;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Noto Sans TC', sans-serif; display: flex; height: 100vh; overflow: hidden; background-color: var(--bg-color); }
+
+        /* 側邊欄 */
+        .sidebar {
+            width: 260px;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+        .logo { font-size: 22px; font-weight: 700; color: var(--accent-color); margin-bottom: 30px; display: flex; align-items: center; gap: 10px; }
+        
+        .nav-links { list-style: none; }
+        .nav-links li { margin-bottom: 8px; }
+        
+        /* 連結樣式：注意 target 屬性 */
+        .nav-item {
+            display: block;
+            padding: 12px 16px;
+            border-radius: 8px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: 0.2s;
+        }
+        .nav-item:hover { background-color: rgba(74, 144, 226, 0.1); color: var(--accent-color); }
+        
+        /* 當前選中狀態 (透過 JS 切換) */
+        .nav-item.active { background-color: rgba(74, 144, 226, 0.1); color: var(--accent-color); font-weight: 700; }
+
+        /* 主內容區 - 放置 iframe */
+        .main-content { flex: 1; display: flex; flex-direction: column; }
+        
+        /* iframe 設定：無邊框，填滿剩餘空間 */
+        #content-frame {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background-color: var(--bg-color);
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="sidebar">
+        <div class="logo">🚀 ToolBox</div>
+        <ul class="nav-links">
+            <li><a href="welcome.html" target="content-frame" class="nav-item active" onclick="setActive(this)">🏠 首頁</a></li>
+            
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
+            <p style="font-size: 12px; color: #999; padding-left: 15px; margin-bottom: 10px;">工具列表</p>
+            
+            <li><a href="tool-password.html" target="content-frame" class="nav-item" onclick="setActive(this)">密碼產生器</a></li>
+            <li><a href="tool-AdobeSeal.html" target="content-frame" class="nav-item" onclick="setActive(this)">Adobe印章產生器</a></li>
+            </ul>
+    </nav>
+
+    <main class="main-content">
+        <iframe src="welcome.html" name="content-frame" id="content-frame"></iframe>
+    </main>
+
+    <script>
+        // 用來處理側邊欄「哪個被選中」的樣式切換
+        function setActive(element) {
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+        }
+    </script>
+</body>
+</html>

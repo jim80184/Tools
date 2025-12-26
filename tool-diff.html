@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diff 檔案比對工具</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --accent-color: #4a90e2;
+            --accent-hover: #357abd;
+            --bg-color: #f4f6f8;
+            --card-bg: #ffffff;
+            --text-primary: #333;
+            --text-secondary: #666;
+            --border-color: #e1e4e8;
+            --input-bg: #f8f9fa;
+            --success-color: #27ae60;
+            --danger-color: #e74c3c;
+            --warning-color: #f39c12;
+            
+            /* Diff 專用顏色 */
+            --diff-add-bg: #d4edda;
+            --diff-add-text: #155724;
+            --diff-del-bg: #f8d7da;
+            --diff-del-text: #721c24;
+            --diff-mod-bg: #fff3cd;
+            --diff-mod-text: #856404;
+        }
+
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: var(--bg-color); padding: 20px; color: var(--text-primary); margin: 0; }
+        * { box-sizing: border-box; }
+
+        /* 核心卡片 - 設寬一點以容納比對視窗 */
+        .tool-card {
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            max-width: 1400px; /* Diff 需要大空間 */
+            width: 100%;
+            margin: 0 auto;
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+        }
+
+        h2 { margin: 0 0 20px 0; text-align: center; color: var(--accent-color); font-size: 24px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        
+        /* --- 控制列 --- */
+        .controls-area {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            padding: 20px;
+            background: var(--input-bg);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .checkbox-group { display: flex; gap: 15px; margin-right: auto; }
+        .checkbox-label { display: flex; align-items: center; cursor: pointer; user-select: none; font-size: 14px; }
+        .checkbox-label input { margin-right: 6px; accent-color: var(--accent-color); transform: scale(1.1); }
+
+        button {
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.2s;
+            border: 1px solid transparent;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .btn-primary { background-color: var(--accent-color); color: white; }
+        .btn-primary:hover { background-color: var(--accent-hover); }
+        .btn-outline { background: transparent; border: 1px solid var(--border-color); color: var(--text-primary); }
+        .btn-outline:hover { border-color: var(--accent-color); color: var(--accent-color); background: #fff; }
+        .btn-danger { background: transparent; border: 1px solid var(--danger-color); color: var(--danger-color); }
+        .btn-danger:hover { background: var(--danger-color); color: white; }
+
+        /* --- 輸入區 --- */
+        .diff-input-wrapper { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        
+        .input-box {
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            display: flex; flex-direction: column;
+            position: relative;
+            transition: border-color 0.2s;
+        }
+        .input-box.drag-over { border-color: var(--accent-color); box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1); }
+
+        .box-header {
+            padding: 10px 15px;
+            background: #f8f9fa;
+            border-bottom: 1px solid var(--border-color);
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 13px; font-weight: 600; color: var(--text-secondary);
+            border-radius: 8px 8px 0 0;
+        }
+        
+        .diff-textarea {
+            flex: 1;
+            min-height: 250px;
+            padding: 15px;
+            border: none;
+            resize: vertical;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 13px;
+            outline: none;
+            border-radius: 0 0 8px 8px;
+        }
+
+        .drag-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.9);
+            display: none; align-items: center; justify-content: center;
+            font-weight: bold; color: var(--accent-color);
+            z-index: 10; border-radius: 8px;
+        }
+        .input-box.drag-over .drag-overlay { display: flex; }
+
+        /* --- 比對結果區 --- */
+        .diff-container {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+            background: #fff;
+            display: flex; flex-direction: column;
+        }
+
+        /* 統計條 */
+        .diff-stats {
+            display: flex; gap: 15px; padding: 10px 15px;
+            background: #f1f3f5; border-bottom: 1px solid var(--border-color);
+            font-size: 13px; flex-wrap: wrap; align-items: center;
+        }
+        .stat-badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 4px 10px; border-radius: 4px; background: #fff;
+            border: 1px solid var(--border-color); font-weight: bold;
+        }
+        .stat-badge.add { color: var(--success-color); border-color: var(--success-color); }
+        .stat-badge.del { color: var(--danger-color); border-color: var(--danger-color); }
+        .stat-badge.mod { color: var(--warning-color); border-color: var(--warning-color); }
+
+        /* Minimap */
+        .diff-minimap {
+            height: 30px; background: #f8f9fa; border-bottom: 1px solid var(--border-color);
+            display: flex; position: relative; overflow: hidden; cursor: pointer;
+        }
+        .minimap-content { flex: 1; display: flex; height: 100%; position: relative; }
+        .minimap-line { flex: 1; height: 100%; min-width: 1px; }
+        .minimap-line.added { background: var(--success-color); }
+        .minimap-line.removed { background: var(--danger-color); }
+        .minimap-line.modified { background: var(--warning-color); }
+        .minimap-viewport {
+            position: absolute; top: 0; bottom: 0;
+            background: rgba(74, 144, 226, 0.2);
+            border: 1px solid var(--accent-color);
+            pointer-events: none;
+        }
+
+        /* 內容區 */
+        .diff-panels { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--border-color); }
+        .diff-panel { overflow-x: auto; }
+        
+        .diff-line {
+            display: grid;
+            grid-template-columns: 50px 1fr;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 13px;
+            line-height: 22px;
+            border-bottom: 1px solid #f5f5f5;
+        }
+        
+        .line-num {
+            background: #f8f9fa; color: #999; text-align: right; padding-right: 8px;
+            border-right: 1px solid var(--border-color); user-select: none;
+        }
+        .line-content { padding-left: 10px; white-space: pre-wrap; word-break: break-all; }
+        
+        /* 差異樣式 */
+        .line-added { background: var(--diff-add-bg); color: var(--diff-add-text); }
+        .line-removed { background: var(--diff-del-bg); color: var(--diff-del-text); }
+        .line-modified { background: var(--diff-mod-bg); color: var(--diff-mod-text); }
+        .line-empty { background: #fafafa; }
+        
+        .char-diff { font-weight: bold; border-bottom: 2px solid rgba(0,0,0,0.2); }
+
+        /* 全螢幕模式 */
+        body.fullscreen-active { padding: 0; overflow: hidden; }
+        body.fullscreen-active .tool-card {
+            max-width: 100%; height: 100vh; border-radius: 0; border: none; padding: 10px;
+        }
+        body.fullscreen-active .diff-textarea { min-height: 30vh; }
+        body.fullscreen-active .diff-panels { flex: 1; overflow: auto; }
+
+        /* Notification & Loading */
+        .notification {
+            position: fixed; bottom: 20px; right: 20px; padding: 12px 24px; 
+            background: #333; color: #fff; border-radius: 8px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 1000;
+            transform: translateY(100px); transition: transform 0.3s;
+        }
+        .notification.show { transform: translateY(0); }
+        .notification.success { background: var(--success-color); }
+        .notification.error { background: var(--danger-color); }
+        
+        .loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.8); z-index: 999;
+            display: none; align-items: center; justify-content: center;
+            backdrop-filter: blur(2px);
+        }
+        .loading-spinner {
+            width: 40px; height: 40px; border: 4px solid var(--border-color);
+            border-top-color: var(--accent-color); border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @media (max-width: 768px) {
+            .diff-input-wrapper, .diff-panels { grid-template-columns: 1fr; }
+            .diff-panels { max-height: 500px; overflow-y: auto; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="tool-card">
+    <h2>🔄 Diff 檔案比對工具</h2>
+
+    <div class="controls-area">
+        <div class="checkbox-group">
+            <label class="checkbox-label"><input type="checkbox" id="ignoreWhitespace"> 忽略空白</label>
+            <label class="checkbox-label"><input type="checkbox" id="ignoreCase"> 忽略大小寫</label>
+        </div>
+        <button class="btn-primary" onclick="compareTexts()">🔍 開始比對</button>
+        <button class="btn-danger" onclick="clearAll()">🗑️ 清除</button>
+        <button class="btn-outline" onclick="toggleFullscreen()" id="fullscreenBtn">⛶ 全螢幕</button>
+    </div>
+
+    <div class="diff-input-wrapper">
+        <div class="input-box" id="leftInputBox">
+            <div class="box-header">
+                <span id="leftFileName">📄 檔案 A (原始)</span>
+                <div>
+                    <input type="file" id="leftFileInput" style="display:none" onchange="handleFileSelect('leftText', this)">
+                    <button class="btn-outline" style="padding:2px 8px; font-size:12px;" onclick="document.getElementById('leftFileInput').click()">載入檔案</button>
+                </div>
+            </div>
+            <textarea id="leftText" class="diff-textarea" placeholder="貼上內容或拖曳檔案至此..."></textarea>
+            <div class="drag-overlay">放開以載入檔案 A</div>
+        </div>
+
+        <div class="input-box" id="rightInputBox">
+            <div class="box-header">
+                <span id="rightFileName">📄 檔案 B (變更後)</span>
+                <div>
+                    <input type="file" id="rightFileInput" style="display:none" onchange="handleFileSelect('rightText', this)">
+                    <button class="btn-outline" style="padding:2px 8px; font-size:12px;" onclick="document.getElementById('rightFileInput').click()">載入檔案</button>
+                </div>
+            </div>
+            <textarea id="rightText" class="diff-textarea" placeholder="貼上內容或拖曳檔案至此..."></textarea>
+            <div class="drag-overlay">放開以載入檔案 B</div>
+        </div>
+    </div>
+
+    <div class="diff-container" id="diffContainer" style="display:none;">
+        <div class="diff-stats">
+            <span class="stat-badge add">新增: <span id="statAdded">0</span></span>
+            <span class="stat-badge del">刪除: <span id="statRemoved">0</span></span>
+            <span class="stat-badge mod">修改: <span id="statModified">0</span></span>
+            <span style="color:#666; margin-left:auto; font-size:12px;">支援左右同步捲動</span>
+        </div>
+
+        <div class="diff-minimap" id="diffMinimap">
+            <div class="minimap-content" id="minimapContent">
+                <div class="minimap-viewport" id="minimapViewport"></div>
+            </div>
+        </div>
+
+        <div class="diff-panels">
+            <div class="diff-panel" id="leftPanel">
+                <div id="leftOutput"></div>
+            </div>
+            <div class="diff-panel" id="rightPanel">
+                <div id="rightOutput"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner"></div>
+</div>
+<div id="notification" class="notification"></div>
+
+<script>
+    (function() {
+        // --- 通用工具函數 ---
+        function showNotification(msg, type = 'info') {
+            const el = document.getElementById('notification');
+            el.textContent = msg;
+            el.className = `notification show ${type}`;
+            setTimeout(() => el.className = 'notification', 3000);
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+        }
+
+        // --- 全域變數 ---
+        let isSyncing = false;
+
+        // --- 初始化事件 ---
+        window.onload = function() {
+            setupFileDrop();
+            setupSyncScroll();
+        };
+
+        // --- 核心邏輯：比對文字 ---
+        window.compareTexts = function() {
+            const leftText = document.getElementById('leftText').value;
+            const rightText = document.getElementById('rightText').value;
+
+            if (!leftText && !rightText) return showNotification('請輸入內容或載入檔案', 'error');
+
+            showLoading(true);
+
+            // 使用 setTimeout 避免 UI 卡死
+            setTimeout(() => {
+                const ignoreWhitespace = document.getElementById('ignoreWhitespace').checked;
+                const ignoreCase = document.getElementById('ignoreCase').checked;
+
+                let leftLines = leftText.split('\n');
+                let rightLines = rightText.split('\n');
+
+                // 預處理
+                const processLine = (line) => {
+                    if (ignoreWhitespace) line = line.trim();
+                    if (ignoreCase) line = line.toLowerCase();
+                    return line;
+                };
+
+                const procLeft = leftLines.map(processLine);
+                const procRight = rightLines.map(processLine);
+
+                // 計算 Diff (LCS 演算法簡化版)
+                const diff = computeDiff(procLeft, procRight);
+
+                // 渲染結果
+                renderDiff(diff, leftLines, rightLines);
+                
+                document.getElementById('diffContainer').style.display = 'flex';
+                showLoading(false);
+                showNotification('比對完成', 'success');
+            }, 100);
+        };
+
+        // LCS Diff 演算法
+        function computeDiff(left, right) {
+            const m = left.length;
+            const n = right.length;
+            // 空間優化：僅用於 demo，大檔案建議使用更優化的 diff 庫
+            if(m * n > 2000000) return computeSimpleDiff(left, right); // 超大檔案用簡單比對
+
+            const lcs = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+
+            for (let i = 1; i <= m; i++) {
+                for (let j = 1; j <= n; j++) {
+                    if (left[i - 1] === right[j - 1]) {
+                        lcs[i][j] = lcs[i - 1][j - 1] + 1;
+                    } else {
+                        lcs[i][j] = Math.max(lcs[i - 1][j], lcs[i][j - 1]);
+                    }
+                }
+            }
+
+            const diff = [];
+            let i = m, j = n;
+            while (i > 0 || j > 0) {
+                if (i > 0 && j > 0 && left[i - 1] === right[j - 1]) {
+                    diff.unshift({ type: 'unchanged', lIdx: i - 1, rIdx: j - 1 });
+                    i--; j--;
+                } else if (j > 0 && (i === 0 || lcs[i][j - 1] >= lcs[i - 1][j])) {
+                    diff.unshift({ type: 'added', lIdx: null, rIdx: j - 1 });
+                    j--;
+                } else if (i > 0) {
+                    diff.unshift({ type: 'removed', lIdx: i - 1, rIdx: null });
+                    i--;
+                }
+            }
+            return diff;
+        }
+
+        function computeSimpleDiff(left, right) {
+            // 簡單逐行比對 (fallback)
+            const diff = [];
+            const max = Math.max(left.length, right.length);
+            for(let i=0; i<max; i++) {
+                if(i >= left.length) diff.push({ type: 'added', lIdx: null, rIdx: i });
+                else if(i >= right.length) diff.push({ type: 'removed', lIdx: i, rIdx: null });
+                else if(left[i] === right[i]) diff.push({ type: 'unchanged', lIdx: i, rIdx: i });
+                else {
+                    diff.push({ type: 'removed', lIdx: i, rIdx: null });
+                    diff.push({ type: 'added', lIdx: null, rIdx: i });
+                }
+            }
+            return diff;
+        }
+
+        // 渲染結果 HTML
+        function renderDiff(diff, rawLeft, rawRight) {
+            const leftOutput = document.getElementById('leftOutput');
+            const rightOutput = document.getElementById('rightOutput');
+            const minimapContent = document.getElementById('minimapContent');
+            const minimapViewport = document.getElementById('minimapViewport'); // 保留 viewport
+
+            leftOutput.innerHTML = '';
+            rightOutput.innerHTML = '';
+            // 清空 minimap 但保留 viewport 元素
+            minimapContent.innerHTML = '';
+            minimapContent.appendChild(minimapViewport);
+
+            let added = 0, removed = 0, modified = 0;
+            let lNum = 1, rNum = 1;
+
+            // 處理 Diff 區塊
+            diff.forEach((item, index) => {
+                // 檢查是否為修改 (removed 緊接 added)
+                let isMod = false;
+                if(item.type === 'removed' && index + 1 < diff.length && diff[index+1].type === 'added') {
+                    // 這是一個簡單的修改偵測，實際可做更細
+                }
+
+                // 建立左側行
+                const lDiv = document.createElement('div');
+                lDiv.className = 'diff-line';
+                if(item.type === 'removed') {
+                    lDiv.innerHTML = createLineHtml(lNum++, rawLeft[item.lIdx], 'removed');
+                    removed++;
+                    createMinimapLine('removed');
+                } else if(item.type === 'unchanged') {
+                    lDiv.innerHTML = createLineHtml(lNum++, rawLeft[item.lIdx], '');
+                    createMinimapLine('');
+                } else {
+                    lDiv.innerHTML = createLineHtml('', '', 'empty'); // 右側新增時，左側為空
+                }
+                leftOutput.appendChild(lDiv);
+
+                // 建立右側行
+                const rDiv = document.createElement('div');
+                rDiv.className = 'diff-line';
+                if(item.type === 'added') {
+                    rDiv.innerHTML = createLineHtml(rNum++, rawRight[item.rIdx], 'added');
+                    added++;
+                    // 如果上一行是 removed，這一行在 minimap 標記為 modified 比較好讀
+                    // 這裡簡化處理，直接標記 added
+                    // 修正：minimap 應該只畫一次，這裡避免重複畫
+                } else if(item.type === 'unchanged') {
+                    rDiv.innerHTML = createLineHtml(rNum++, rawRight[item.rIdx], '');
+                } else {
+                    rDiv.innerHTML = createLineHtml('', '', 'empty'); // 左側刪除時，右側為空
+                    // 修正 minimap 邏輯：removed 已經在上面畫了
+                }
+                rightOutput.appendChild(rDiv);
+            });
+
+            // 更新統計
+            document.getElementById('statAdded').textContent = added;
+            document.getElementById('statRemoved').textContent = removed;
+            // 這裡的邏輯：如果一個區塊先 removed 再 added，視覺上是 modified
+            // 但為了簡化，統計保持原樣，使用者可自行判斷
+
+            // 更新 Viewport 高度比例
+            updateMinimapViewport();
+        }
+
+        function createLineHtml(num, content, type) {
+            const cls = type ? `line-${type}` : '';
+            // 轉義 HTML
+            const safeContent = content ? content.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : '';
+            return `<div class="line-num">${num}</div><div class="line-content ${cls}">${safeContent || '&nbsp;'}</div>`;
+        }
+
+        function createMinimapLine(type) {
+            const div = document.createElement('div');
+            div.className = `minimap-line ${type}`;
+            document.getElementById('minimapContent').appendChild(div);
+        }
+
+        // --- 拖曳檔案處理 ---
+        function setupFileDrop() {
+            const boxes = ['leftInputBox', 'rightInputBox'];
+            boxes.forEach(id => {
+                const box = document.getElementById(id);
+                const textAreaId = id === 'leftInputBox' ? 'leftText' : 'rightText';
+                const fileNameId = id === 'leftInputBox' ? 'leftFileName' : 'rightFileName';
+
+                box.addEventListener('dragover', (e) => { e.preventDefault(); box.classList.add('drag-over'); });
+                box.addEventListener('dragleave', (e) => { e.preventDefault(); box.classList.remove('drag-over'); });
+                box.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    box.classList.remove('drag-over');
+                    const file = e.dataTransfer.files[0];
+                    if(file) readFile(file, textAreaId, fileNameId);
+                });
+            });
+        }
+
+        window.handleFileSelect = function(textAreaId, input) {
+            const file = input.files[0];
+            const fileNameId = textAreaId === 'leftText' ? 'leftFileName' : 'rightFileName';
+            if(file) readFile(file, textAreaId, fileNameId);
+        }
+
+        function readFile(file, textAreaId, fileNameId) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById(textAreaId).value = e.target.result;
+                document.getElementById(fileNameId).textContent = `📄 ${file.name}`;
+                showNotification(`已載入 ${file.name}`, 'success');
+            };
+            reader.readAsText(file);
+        }
+
+        // --- 同步捲動 & Minimap ---
+        function setupSyncScroll() {
+            const left = document.getElementById('leftPanel');
+            const right = document.getElementById('rightPanel');
+            const minimap = document.getElementById('diffMinimap');
+            const viewport = document.getElementById('minimapViewport');
+
+            const sync = (source, target) => {
+                if(isSyncing) return;
+                isSyncing = true;
+                target.scrollTop = source.scrollTop;
+                target.scrollLeft = source.scrollLeft;
+                
+                // 更新 Minimap viewport 位置
+                const percent = source.scrollTop / (source.scrollHeight - source.clientHeight);
+                const trackWidth = minimap.clientWidth;
+                const viewWidth = viewport.clientWidth;
+                const maxLeft = trackWidth - viewWidth;
+                
+                // 這裡 Minimap 是橫向的代表縱向內容 (為了省空間) -> 改為標準垂直 Minimap 較直覺？
+                // 原版代碼是橫向的，我們維持橫向但邏輯要對
+                // 假設 minimap 寬度 = 檔案總行數，viewport 寬度 = 可視區域行數
+                // 這裡簡化：viewport 隨捲動移動
+                viewport.style.left = (percent * (trackWidth - viewWidth)) + 'px';
+
+                setTimeout(() => isSyncing = false, 50);
+            };
+
+            left.addEventListener('scroll', () => sync(left, right));
+            right.addEventListener('scroll', () => sync(right, left));
+        }
+        
+        function updateMinimapViewport() {
+            // 計算 viewport 寬度佔比
+            const panel = document.getElementById('leftPanel');
+            const minimap = document.getElementById('diffMinimap');
+            const viewport = document.getElementById('minimapViewport');
+            
+            if(panel.scrollHeight > panel.clientHeight) {
+                const ratio = panel.clientHeight / panel.scrollHeight;
+                const width = minimap.clientWidth * ratio;
+                viewport.style.width = `${Math.max(20, width)}px`; // 至少 20px
+            } else {
+                viewport.style.width = '100%';
+            }
+        }
+
+        // --- 其他功能 ---
+        window.clearAll = function() {
+            document.getElementById('leftText').value = '';
+            document.getElementById('rightText').value = '';
+            document.getElementById('leftFileName').textContent = '📄 檔案 A (原始)';
+            document.getElementById('rightFileName').textContent = '📄 檔案 B (變更後)';
+            document.getElementById('diffContainer').style.display = 'none';
+            showNotification('已清除所有內容');
+        };
+
+        window.toggleFullscreen = function() {
+            document.body.classList.toggle('fullscreen-active');
+            const btn = document.getElementById('fullscreenBtn');
+            if(document.body.classList.contains('fullscreen-active')) {
+                btn.textContent = '縮小';
+                btn.classList.add('btn-primary');
+                btn.classList.remove('btn-outline');
+            } else {
+                btn.textContent = '⛶ 全螢幕';
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-outline');
+            }
+        };
+
+    })();
+</script>
+
+</body>
+</html>

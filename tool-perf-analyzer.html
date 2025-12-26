@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>執行檔效能檢視器</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
+
+    <style>
+        :root {
+            --accent-color: #4a90e2;
+            --accent-hover: #357abd;
+            --bg-color: #f4f6f8;
+            --card-bg: #ffffff;
+            --text-primary: #333;
+            --text-secondary: #666;
+            --border-color: #e1e4e8;
+            --input-bg: #f8f9fa;
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+        }
+
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: var(--bg-color); padding: 20px; color: var(--text-primary); margin: 0; }
+        * { box-sizing: border-box; }
+
+        .tool-card {
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            max-width: 1200px; 
+            margin: 0 auto;
+            border: 1px solid var(--border-color);
+        }
+
+        h2 { margin: 0 0 20px 0; text-align: center; color: var(--accent-color); font-size: 24px; }
+        h3 { font-size: 18px; margin-bottom: 15px; color: var(--text-primary); border-left: 4px solid var(--accent-color); padding-left: 10px; }
+
+        /* 輸入面板 */
+        .input-panel { transition: all 0.3s; }
+        
+        .upload-area {
+            border: 2px dashed var(--border-color);
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            background-color: var(--input-bg);
+            transition: all 0.2s;
+            margin-bottom: 20px;
+        }
+        .upload-area:hover { border-color: var(--accent-color); background-color: #fff; }
+        .upload-icon { font-size: 40px; margin-bottom: 10px; opacity: 0.7; }
+        .upload-text { font-weight: 500; color: var(--text-secondary); }
+
+        textarea.paste-area {
+            width: 100%;
+            height: 120px;
+            padding: 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: var(--input-bg);
+            font-family: 'Roboto Mono', monospace;
+            font-size: 12px;
+            resize: vertical;
+            outline: none;
+            margin-bottom: 20px;
+        }
+        textarea.paste-area:focus { border-color: var(--accent-color); background-color: #fff; }
+
+        .btn-group { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+        
+        button {
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.2s;
+            border: 1px solid transparent;
+        }
+        .btn-primary { background-color: var(--accent-color); color: white; }
+        .btn-primary:hover { background-color: var(--accent-hover); }
+        .btn-secondary { background-color: #fff; border-color: var(--border-color); color: var(--text-primary); }
+        .btn-secondary:hover { background-color: var(--bg-color); }
+        .btn-outline { background: transparent; border: 1px solid var(--danger-color); color: var(--danger-color); }
+        .btn-outline:hover { background: var(--danger-color); color: white; }
+
+        /* 儀表板 */
+        .dashboard { display: none; margin-top: 20px; }
+        .dashboard.active { display: block; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, var(--accent-color) 0%, #2980b9 100%);
+            border-radius: 12px;
+            padding: 20px;
+            color: white;
+            box-shadow: 0 4px 6px rgba(74, 144, 226, 0.2);
+        }
+        .stat-label { font-size: 12px; opacity: 0.9; text-transform: uppercase; margin-bottom: 5px; }
+        .stat-value { font-size: 24px; font-weight: 700; margin-bottom: 5px; }
+        .stat-change { font-size: 12px; opacity: 0.8; }
+
+        .dashboard-wrapper { display: flex; gap: 20px; flex-wrap: wrap; }
+        
+        .process-selector {
+            flex: 0 0 280px;
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 15px;
+            max-height: 800px;
+            overflow-y: auto;
+        }
+        .main-content { flex: 1; min-width: 0; }
+
+        .search-box { width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 10px; }
+        .filter-group { background: var(--input-bg); padding: 10px; border-radius: 6px; margin-bottom: 10px; font-size: 12px; }
+        .filter-group input { width: 60px; padding: 4px; border: 1px solid var(--border-color); border-radius: 4px; }
+        
+        .process-list { list-style: none; padding: 0; margin: 0; }
+        .process-item {
+            display: flex; align-items: center; padding: 8px;
+            border-radius: 6px; cursor: pointer; font-size: 13px; margin-bottom: 2px;
+        }
+        .process-item:hover { background-color: var(--input-bg); }
+        .process-item.selected { background-color: rgba(74, 144, 226, 0.1); color: var(--accent-color); font-weight: bold; }
+        .process-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0 8px; }
+
+        .chart-panel {
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            position: relative;
+        }
+        .chart-container { position: relative; height: 350px; width: 100%; }
+        
+        .alerts-panel { background: #fff5f5; border-left: 4px solid var(--danger-color); padding: 15px; border-radius: 4px; margin-top: 20px; }
+        
+        .notification {
+            position: fixed; bottom: 20px; right: 20px; padding: 12px 24px; 
+            background: #333; color: #fff; border-radius: 8px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 1000;
+            transform: translateY(100px); transition: transform 0.3s;
+        }
+        .notification.show { transform: translateY(0); }
+        .notification.success { background: var(--success-color); }
+        .notification.error { background: var(--danger-color); }
+
+        .loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.8); z-index: 999;
+            display: none; align-items: center; justify-content: center; flex-direction: column;
+        }
+        .loading-spinner {
+            width: 40px; height: 40px; border: 4px solid var(--border-color);
+            border-top-color: var(--accent-color); border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @media (max-width: 900px) {
+            .dashboard-wrapper { flex-direction: column; }
+            .process-selector { width: 100%; max-height: 300px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="tool-card">
+    <h2>🖥️ 執行檔效能檢視器</h2>
+
+    <div class="input-panel" id="inputPanel">
+        <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+            <div class="upload-icon">📁</div>
+            <div class="upload-text">點擊上傳 CSV / JSON / TSV 效能紀錄檔</div>
+            <div style="font-size: 12px; color: #999; margin-top: 5px;">亦可直接拖曳檔案至此</div>
+        </div>
+        <input type="file" id="fileInput" accept=".csv,.json,.tsv,.txt" style="display: none;">
+
+        <div style="text-align: center; margin-bottom: 10px; font-size: 14px; color: #999;">或</div>
+        <textarea id="pasteArea" class="paste-area" placeholder="直接貼上資料內容..."></textarea>
+
+        <div class="btn-group">
+            <button class="btn-primary" onclick="analyzeData()">🔍 開始分析</button>
+            <button class="btn-secondary" onclick="loadExample()">📝 載入範例資料</button>
+            <button class="btn-outline" onclick="clearAll()">🗑️ 清除重置</button>
+        </div>
+        
+        <p style="text-align: center; font-size: 12px; color: #bbb; margin-top: 20px;">
+            支援標準 CSV / JSON 格式效能日誌
+        </p>
+    </div>
+
+    <div class="dashboard" id="dashboard">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h3>📊 分析報告</h3>
+            <button class="btn-secondary" style="padding: 5px 10px; font-size: 12px;" onclick="clearAll()">← 返回上傳</button>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">監控程序總數</div>
+                <div class="stat-value" id="statProcessCount">0</div>
+                <div class="stat-change">Total Processes</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">最高 CPU 使用</div>
+                <div class="stat-value" id="statMaxCPU">-</div>
+                <div class="stat-change" id="statMaxCPUName">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">最高記憶體使用</div>
+                <div class="stat-value" id="statMaxMemory">-</div>
+                <div class="stat-change" id="statMaxMemoryName">-</div>
+            </div>
+        </div>
+
+        <div class="dashboard-wrapper">
+            <div class="process-selector">
+                <div style="font-weight: bold; margin-bottom: 10px; color: var(--text-primary);">🎯 程序篩選</div>
+                <input type="text" id="processSearch" class="search-box" placeholder="搜尋程序名稱..." onkeyup="filterProcessList()">
+                
+                <div class="filter-group">
+                    <label>CPU > </label> <input type="number" id="cpuFilter" value="0.1" step="0.1" onchange="filterProcessList()"> %
+                </div>
+                
+                <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                    <button class="btn-primary" style="flex:1; padding: 5px; font-size: 12px;" onclick="selectAllFiltered()">全選</button>
+                    <button class="btn-secondary" style="flex:1; padding: 5px; font-size: 12px;" onclick="deselectAllFiltered()">取消</button>
+                </div>
+
+                <div style="font-size: 12px; color: #666; margin-bottom: 5px;">已選擇: <span id="selectedCount">0</span></div>
+                <ul class="process-list" id="processList"></ul>
+            </div>
+
+            <div class="main-content">
+                <div class="chart-panel">
+                    <div style="font-weight: bold; margin-bottom: 10px; color: var(--text-primary);">💻 CPU 使用率 (%)</div>
+                    <div class="chart-container">
+                        <canvas id="cpuChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-panel">
+                    <div style="font-weight: bold; margin-bottom: 10px; color: var(--text-primary);">🧠 記憶體使用 (MB)</div>
+                    <div class="chart-container">
+                        <canvas id="memoryChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="chart-panel">
+                    <div style="font-weight: bold; margin-bottom: 10px; color: var(--text-primary);">💿 I/O 讀寫 (MB)</div>
+                    <div class="chart-container">
+                        <canvas id="ioChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="alerts-panel" id="alertsPanel" style="display:none;">
+                    <strong>⚠️ 異常偵測建議</strong>
+                    <div id="alertsList" style="margin-top: 10px; font-size: 13px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner"></div>
+    <div style="margin-top: 15px; color: #666;">資料分析中...</div>
+</div>
+
+<div id="notification" class="notification"></div>
+
+<script>
+(function() {
+    'use strict';
+
+    // 全域變數
+    let rawData = [];
+    let processedData = {};
+    let processStats = {};
+    let selectedProcesses = new Set();
+    let charts = {};
+    
+    // 初始化事件
+    window.onload = function() {
+        setupEventListeners();
+    };
+
+    function setupEventListeners() {
+        const fileInput = document.getElementById('fileInput');
+        fileInput.addEventListener('change', handleFileSelect);
+        
+        // 拖曳上傳
+        const uploadArea = document.getElementById('uploadArea');
+        uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.style.borderColor = 'var(--accent-color)'; });
+        uploadArea.addEventListener('dragleave', (e) => { e.preventDefault(); uploadArea.style.borderColor = 'var(--border-color)'; });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = 'var(--border-color)';
+            if(e.dataTransfer.files.length) {
+                fileInput.files = e.dataTransfer.files;
+                handleFileSelect({ target: { files: e.dataTransfer.files } });
+            }
+        });
+    }
+
+    function handleFileSelect(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            document.getElementById('pasteArea').value = e.target.result;
+            analyzeData();
+        };
+        reader.readAsText(file);
+    }
+
+    function showNotification(msg, type = 'info') {
+        const el = document.getElementById('notification');
+        el.textContent = msg;
+        el.className = `notification show ${type}`;
+        setTimeout(() => el.className = 'notification', 3000);
+    }
+
+    function showLoading(show) {
+        document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+    }
+
+    // 載入範例 (保留功能但移除個人資訊)
+    window.loadExample = function() {
+        const exampleData = `Timestamp,ProcessName,PID,CPUPercent,WorkingSetMB,IOReadKBSec,IOWriteKBSec
+2025-12-20 14:00:00,chrome,1001,15.5,520,100,50
+2025-12-20 14:00:10,chrome,1001,20.1,530,120,60
+2025-12-20 14:00:20,chrome,1001,12.3,525,80,40
+2025-12-20 14:00:00,node,2001,5.2,150,200,100
+2025-12-20 14:00:10,node,2001,8.4,160,250,150
+2025-12-20 14:00:20,node,2001,4.1,155,50,20
+2025-12-20 14:00:00,system,0,2.1,80,10,10
+2025-12-20 14:00:10,system,0,1.5,82,5,5
+2025-12-20 14:00:20,system,0,3.0,85,20,15`;
+        document.getElementById('pasteArea').value = exampleData;
+        analyzeData();
+    }
+
+    window.clearAll = function() {
+        document.getElementById('pasteArea').value = '';
+        document.getElementById('fileInput').value = '';
+        document.getElementById('inputPanel').style.display = 'block';
+        document.getElementById('dashboard').classList.remove('active');
+        rawData = []; processedData = {}; selectedProcesses.clear();
+        Object.values(charts).forEach(c => c.destroy());
+        charts = {};
+    }
+
+    window.analyzeData = function() {
+        const data = document.getElementById('pasteArea').value.trim();
+        if(!data) return showNotification('請輸入或上傳資料', 'error');
+
+        showLoading(true);
+        setTimeout(() => {
+            try {
+                parseData(data);
+                document.getElementById('inputPanel').style.display = 'none';
+                document.getElementById('dashboard').classList.add('active');
+                
+                renderStats();
+                renderProcessList();
+                selectAllFiltered();
+                
+                showLoading(false);
+                showNotification('分析完成', 'success');
+            } catch(e) {
+                showLoading(false);
+                showNotification('解析錯誤: ' + e.message, 'error');
+                console.error(e);
+            }
+        }, 300);
+    }
+
+    function parseData(content) {
+        rawData = []; processedData = {}; processStats = {};
+        
+        const lines = content.split('\n');
+        const isJson = lines[0].trim().startsWith('{');
+
+        if(isJson) {
+            lines.forEach(line => {
+                if(!line.trim()) return;
+                try {
+                    const obj = JSON.parse(line);
+                    rawData.push(normalizeRow(obj));
+                } catch(e) {}
+            });
+        } else {
+            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+            for(let i=1; i<lines.length; i++) {
+                if(!lines[i].trim()) continue;
+                const vals = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+                let obj = {};
+                headers.forEach((h, idx) => obj[h] = vals[idx]);
+                rawData.push(normalizeRow(obj));
+            }
+        }
+
+        rawData.forEach(row => {
+            const name = row.ProcessName;
+            if(!processedData[name]) processedData[name] = [];
+            processedData[name].push(row);
+            
+            if(!processStats[name]) processStats[name] = { maxCpu: 0, maxMem: 0, maxIo: 0 };
+            processStats[name].maxCpu = Math.max(processStats[name].maxCpu, row.CPU_Percent);
+            processStats[name].maxMem = Math.max(processStats[name].maxMem, row.Memory_MB);
+            processStats[name].maxIo = Math.max(processStats[name].maxIo, (row.IO_Read_KB + row.IO_Write_KB)/1024);
+        });
+    }
+
+    function normalizeRow(obj) {
+        return {
+            Timestamp: obj.Timestamp,
+            ProcessName: obj.ProcessName,
+            CPU_Percent: parseFloat(obj.CPUPercent || obj.CPU_Percent || 0),
+            Memory_MB: parseFloat(obj.WorkingSetMB || obj.Memory_MB || 0),
+            IO_Read_KB: parseFloat(obj.IOReadKBSec || obj.IO_Read_KB || 0),
+            IO_Write_KB: parseFloat(obj.IOWriteKBSec || obj.IO_Write_KB || 0)
+        };
+    }
+
+    function renderStats() {
+        const names = Object.keys(processStats);
+        document.getElementById('statProcessCount').textContent = names.length;
+        
+        let maxCpu = {name:'-', val:0}, maxMem = {name:'-', val:0};
+        names.forEach(name => {
+            if(processStats[name].maxCpu > maxCpu.val) maxCpu = {name: name, val: processStats[name].maxCpu};
+            if(processStats[name].maxMem > maxMem.val) maxMem = {name: name, val: processStats[name].maxMem};
+        });
+
+        document.getElementById('statMaxCPU').textContent = maxCpu.val.toFixed(1) + '%';
+        document.getElementById('statMaxCPUName').textContent = maxCpu.name;
+        document.getElementById('statMaxMemory').textContent = maxMem.val.toFixed(0) + ' MB';
+        document.getElementById('statMaxMemoryName').textContent = maxMem.name;
+    }
+
+    function renderProcessList() {
+        const list = document.getElementById('processList');
+        list.innerHTML = '';
+        
+        const sortedNames = Object.keys(processStats).sort((a,b) => processStats[b].maxCpu - processStats[a].maxCpu);
+        
+        sortedNames.forEach(name => {
+            const li = document.createElement('li');
+            li.className = 'process-item';
+            li.dataset.name = name;
+            li.dataset.cpu = processStats[name].maxCpu;
+            
+            li.innerHTML = `
+                <input type="checkbox" class="chk" style="margin-right:8px;">
+                <span class="process-name">${name}</span>
+                <span style="font-size:11px; color:#999;">${processStats[name].maxCpu.toFixed(1)}%</span>
+            `;
+            
+            li.onclick = (e) => {
+                if(e.target.type !== 'checkbox') {
+                    const chk = li.querySelector('.chk');
+                    chk.checked = !chk.checked;
+                }
+                toggleSelection(name);
+            };
+            
+            list.appendChild(li);
+        });
+    }
+
+    window.filterProcessList = function() {
+        const keyword = document.getElementById('processSearch').value.toLowerCase();
+        const minCpu = parseFloat(document.getElementById('cpuFilter').value) || 0;
+        
+        document.querySelectorAll('.process-item').forEach(item => {
+            const name = item.dataset.name.toLowerCase();
+            const cpu = parseFloat(item.dataset.cpu);
+            const show = name.includes(keyword) && cpu >= minCpu;
+            item.style.display = show ? 'flex' : 'none';
+        });
+    }
+
+    window.selectAllFiltered = function() {
+        document.querySelectorAll('.process-item').forEach(item => {
+            if(item.style.display !== 'none') {
+                const name = item.dataset.name;
+                item.querySelector('.chk').checked = true;
+                selectedProcesses.add(name);
+                item.classList.add('selected');
+            }
+        });
+        updateCharts();
+        updateCount();
+    }
+
+    window.deselectAllFiltered = function() {
+        document.querySelectorAll('.process-item').forEach(item => {
+            if(item.style.display !== 'none') {
+                const name = item.dataset.name;
+                item.querySelector('.chk').checked = false;
+                selectedProcesses.delete(name);
+                item.classList.remove('selected');
+            }
+        });
+        updateCharts();
+        updateCount();
+    }
+
+    function toggleSelection(name) {
+        if(selectedProcesses.has(name)) selectedProcesses.delete(name);
+        else selectedProcesses.add(name);
+        
+        const item = document.querySelector(`.process-item[data-name="${name}"]`);
+        if(item) {
+            item.classList.toggle('selected', selectedProcesses.has(name));
+            item.querySelector('.chk').checked = selectedProcesses.has(name);
+        }
+        updateCharts();
+        updateCount();
+    }
+
+    function updateCount() {
+        document.getElementById('selectedCount').textContent = selectedProcesses.size;
+        
+        const alertsPanel = document.getElementById('alertsPanel');
+        const alertsList = document.getElementById('alertsList');
+        alertsList.innerHTML = '';
+        let hasAlert = false;
+        
+        selectedProcesses.forEach(name => {
+            if(processStats[name].maxCpu > 80) {
+                hasAlert = true;
+                alertsList.innerHTML += `<div style="margin-bottom:4px;">🔴 <strong>${name}</strong>: CPU 峰值達 ${processStats[name].maxCpu}%</div>`;
+            }
+        });
+        alertsPanel.style.display = hasAlert ? 'block' : 'none';
+    }
+
+    function updateCharts() {
+        createChart('cpuChart', 'CPU_Percent', 'CPU 使用率 (%)');
+        createChart('memoryChart', 'Memory_MB', '記憶體 (MB)');
+        createChart('ioChart', 'IO_Read_KB', 'I/O 讀取 (KB)', true); 
+    }
+
+    function createChart(canvasId, key, label, isIO = false) {
+        const ctx = document.getElementById(canvasId);
+        if(!ctx) return;
+        
+        const datasets = [];
+        const colors = ['#4a90e2', '#e74c3c', '#f1c40f', '#2ecc71', '#9b59b6', '#34495e', '#e67e22'];
+        let colorIdx = 0;
+
+        selectedProcesses.forEach(name => {
+            const records = processedData[name].sort((a,b) => new Date(a.Timestamp) - new Date(b.Timestamp));
+            const color = colors[colorIdx++ % colors.length];
+            
+            if(isIO) {
+                datasets.push({
+                    label: `${name} (Read)`,
+                    data: records.map(r => ({x: r.Timestamp, y: r.IO_Read_KB / 1024})),
+                    borderColor: color,
+                    borderDash: [5, 5],
+                    borderWidth: 1,
+                    pointRadius: 0
+                });
+                datasets.push({
+                    label: `${name} (Write)`,
+                    data: records.map(r => ({x: r.Timestamp, y: r.IO_Write_KB / 1024})),
+                    borderColor: color,
+                    borderWidth: 2,
+                    pointRadius: 0
+                });
+            } else {
+                datasets.push({
+                    label: name,
+                    data: records.map(r => ({x: r.Timestamp, y: r[key]})),
+                    borderColor: color,
+                    backgroundColor: color + '20',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    tension: 0.1
+                });
+            }
+        });
+
+        if(charts[canvasId]) charts[canvasId].destroy();
+
+        charts[canvasId] = new Chart(ctx, {
+            type: 'line',
+            data: { datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { position: 'bottom', labels: { boxWidth: 10 } },
+                    zoom: {
+                        zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' },
+                        pan: { enabled: true, mode: 'x' }
+                    }
+                },
+                scales: {
+                    x: { type: 'time', time: { unit: 'minute', displayFormats: { minute: 'HH:mm' } }, grid: { display: false } },
+                    y: { beginAtZero: true, title: { display: true, text: isIO ? 'MB/s' : label } }
+                }
+            }
+        });
+    }
+
+})();
+</script>
+</body>
+</html>
